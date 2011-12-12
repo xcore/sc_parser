@@ -80,8 +80,10 @@ static int TryUnaryExpr(const unsigned char UnaryExpr[])
 
       if(!pfSourceRead(&SourceTerminal, SourcePos, 1))
         return FAIL;
+      if((*SourceTerminal < UnaryExpr[1]) || (*SourceTerminal > UnaryExpr[2]))
+        return FAIL; /* source char not in the range */
       SourcePos++;
-      return (*SourceTerminal >= UnaryExpr[1] && *SourceTerminal <= UnaryExpr[2]) ? PASS : FAIL; /* source char in the range then pass */
+      return PASS;
     }
 #endif
 #ifdef STRING_EQ
@@ -92,8 +94,10 @@ static int TryUnaryExpr(const unsigned char UnaryExpr[])
 
       if(!pfSourceRead(&SourceTerminal, SourcePos, TerminalStringLen))
         return FAIL;
+      if(memcmp(SourceTerminal, TerminalString, TerminalStringLen))
+        return FAIL; /* source != terminal */
       SourcePos += TerminalStringLen;
-      return memcmp(SourceTerminal, TerminalString, TerminalStringLen) ? FAIL : PASS; /* source == terminal pass */
+      return PASS;
     }
 #endif
 #ifdef NOT_OP
