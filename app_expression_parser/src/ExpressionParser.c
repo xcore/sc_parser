@@ -1,6 +1,6 @@
 /*
  ============================================================================
- Name        : ExpressionParsing.c
+ Name        : ExpressionParser.c
  Description : Sample code for general purpose parser,
                it doesn't make use of any specific hardware platform
  ============================================================================

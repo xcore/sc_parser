@@ -87,5 +87,17 @@ An alternative can also be empty, in this case it always passes thus next altern
 Empty alternative is meaningful only if last one.
 
 
-The expression_parsing application is sample code that uses the module functions to implement an expression calculator.
+The app_expression_parser application is sample code that uses the module functions to implement an expression calculator.
 ( running into the simulator may take 2 or 3 minutes to compile the grammar and a few seconds to parse the expression).
+
+The app_xml_parser is application is sample code that uses the module functions to build a tree structure based on
+an xml source. Xml grammar (derived from http://www.w3.org) has been modified to manage only 1byte charset.
+A few ambiguous rules corrected. Then decorated with actions to build the tree of elements.
+maximum number of elements is defined by: #define MAX_ELEMENTS 100
+maximum number of nested element is defined by: #define MAX_NESTED_ELEMENTS 20
+Todo: 
+-empty elements ( elements without content ) are not traced.
+-attributes of element are not include in the element node structure
+-could avoid the final sorting of the elements if the ELEMENT structure had vector of pointers to child elements
+instead of just a vector of child elements but would waste a little more memory ( 1 pointer more for each element )
+

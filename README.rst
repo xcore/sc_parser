@@ -26,7 +26,8 @@ Firmware Overview
 
 CompParser: a module for parsing data according to a compiled grammar.
 EbnfGrammarCompiler: a module to generate compiled grammar from an EBNF like grammar.
-ExpressionParsing: a demo usage of the parser modules that implements an expression interpreter.
+ExpressionParser: a demo usage of the parser modules that implements an expression interpreter.
+XmlParser: a demo usage of the parser modules that builds a tree structure that reflects the element structure of an xml source.
 
 Known Issues
 ============
