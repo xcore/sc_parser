@@ -1,7 +1,7 @@
 PARSER MODULE 
 .............
 
-:Stable release:  1.0.3
+:Stable release:  1.0.4
 
 :Status:  Feature complete
 
