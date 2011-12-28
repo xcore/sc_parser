@@ -1,8 +1,6 @@
 #ifndef XML_GRAMMAR_H_INCLUDED
 #define XML_GRAMMAR_H_INCLUDED
 
-#include <stdio.h> /* for the printf function */
-#include <string.h> /* for the memcpy function */
 #include "EbnfGrammarCompiler.h"
 
 /* ebnf grammar (to be compiled) */
