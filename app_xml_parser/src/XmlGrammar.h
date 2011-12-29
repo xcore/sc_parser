@@ -290,7 +290,7 @@ static F_ACTION_PROTO(fFinish)
         if(Element[i].NumChildElements) // if element i has childs
           Element[i].Child->Parent = &Element[i + 1]; // update parent pointer of first child of element i
 
-        if(Element[i + 1].NumChildElements) // if element i has childs
+        if(Element[i + 1].NumChildElements) // if element i+1 has childs
           Element[i + 1].Child->Parent = &Element[i]; // update parent pointer of first child of element i+1
 
         if(Element[i].Parent != NULL) // if element i is the first child of its parent
@@ -308,7 +308,7 @@ static F_ACTION_PROTO(fFinish)
     }
   }
   while(Swapped);
-  for( i = 1; i < TotalElementsNum; i++) // update the parent pointer of not first childs
+  for( i = 2; i < TotalElementsNum; i++) // update the parent pointer of not first childs
     if(Element[i].NestLevel && Element[i].Parent == NULL)
       Element[i].Parent = Element[i - 1].Parent;
   return PASS;
