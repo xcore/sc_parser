@@ -54,8 +54,10 @@ static int TryUnaryExpr(const unsigned char UnaryExpr[])
 
       if(!pfSourceRead(&SourceTerminal, SourcePos, 1))
         return FAIL;
+      if(*SourceTerminal != UnaryExpr[1])
+        return FAIL;
       SourcePos++;
-      return (*SourceTerminal == UnaryExpr[1]) ? PASS : FAIL;
+      return PASS;
     }
 #ifdef REP_OP
     case REP_OP: /* REP_OP MinRep ExtraOptinalRep UnaryExpr */
