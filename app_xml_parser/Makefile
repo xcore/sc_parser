@@ -1,12 +1,12 @@
 # The TARGET variable determines what target system the application is
 # compiled for. It either refers to an XN file in the source directories
 # or a valid argument for the --target option when compiling
-TARGET = XC-1
+TARGET = XC-1A
 
 # The APP_NAME variable determines the name of the final .xe file. It should
 # not include the .xe postfix. If left blank the name will default to
 # the project name
-APP_NAME =
+APP_NAME = 
 
 # The USED_MODULES variable lists other module used by the application.
 USED_MODULES = module_compparser
@@ -17,7 +17,7 @@ USED_MODULES = module_compparser
 # If the variable XCC_MAP_FLAGS is set it overrides the flags passed to
 # xcc for the final link (mapping) stage.
 ifeq "$(CONFIG)" "Debug"
-XCC_FLAGS = -g -O0
+XCC_FLAGS = -g -O3
 else
 XCC_FLAGS = -g -O3
 endif
