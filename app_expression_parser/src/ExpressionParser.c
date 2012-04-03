@@ -55,7 +55,7 @@ static FREAD_PROTO(EbnfGrammarRead)
   return PASS;
 }
 
-#define BIN_GRAMMAR_SIZE 6000 /* usually enough room also for very complex grammars */
+#define BIN_GRAMMAR_SIZE 500 /* enough room for the compiled grammar */
 static unsigned char BinGrammar[BIN_GRAMMAR_SIZE];
 
 /* function for writing the compiled grammar */
@@ -191,7 +191,7 @@ int main()
   }
   printf("Grammar OK\r\n");
 
-  if(FAIL == Parse(BinGrammar, SourceRead, ActFunc))
+  if(FAIL == StartParse(BinGrammar, SourceRead, ActFunc))
   {
     printf("Parsing NOK\r\n");
     return 0;

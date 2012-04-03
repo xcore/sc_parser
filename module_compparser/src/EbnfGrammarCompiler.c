@@ -1,10 +1,16 @@
 /* Ebnf like grammar compiler for general purpose module */
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 #include "EbnfGrammarCompiler.h"
 
 #ifdef _MSC_VER
   #pragma warning(disable: 4996)
+  #pragma warning(disable: 4100)
+#endif
+
+#ifndef EBNF_GRAMMAR_COMPILER_STACK_SIZE
+  #define EBNF_GRAMMAR_COMPILER_STACK_SIZE 100 /* Used by EbnfGrammarCompiler, usually enough, depends on the nested brackets in grammar */
 #endif
 
 /*
@@ -140,14 +146,16 @@ static const unsigned char GrammarBin[] =
 
 /* grammar related action functions */
 
-static FREAD *pfRead;
-static FWRITE *pfWrite;
+static F_READ *pfRead;
+static F_WRITE *pfWrite;
 
 static unsigned long DestPos = 0;
 
 static long Var0, Var1;
 
-#define SYM_SIZE 400 /* max number of syntax rules in the grammar */
+#ifndef EBNF_GRAMMAR_COMPILER_SYM_SIZE
+  #define EBNF_GRAMMAR_COMPILER_SYM_SIZE 400 /* max number of syntax rules in the grammar */
+#endif
 
 struct tagSYMBOL
 {
@@ -158,7 +166,6 @@ typedef struct tagSYMBOL SYMBOL;
 static SYMBOL *pSym;
 static unsigned short SymCount = 0;
 
-#define STACK_SIZE 100 /* usually enough, depends on the nested brackets in grammar */
 static long *pStack;
 static unsigned short SP = 0;
 
@@ -167,43 +174,45 @@ static int Pass = 0;
 static unsigned long MaxSourcePos;
 
 static int Error(char *Msg)
-{
-  fprintf(stderr, "\r\n%s.\r\n", Msg);
-  return FAIL;
-}
+{ fprintf(stderr, "\r\n%s.\r\n", Msg); return FAIL; }
 
 static F_ACTION_PROTO(ActionsInit)
 { /* reset stack, symbol list, dest position, pass count. */
-  DestPos = Pass = SP = SymCount = 0;
-  return PASS;
+  DestPos = Pass = SP = SymCount = 0; return PASS;
 }
 
 static F_ACTION_PROTO(ResetSourcePos)
 { /* reset source and dest position and set second pass. */
-  MaxSourcePos = DestPos = SourcePos = 0;
-  Pass = 1;
-  return PASS;
+  MaxSourcePos = DestPos = SourcePos = 0; Pass = 1; return PASS;
 }
 
 static F_ACTION_PROTO(SymDef)
 { /* add a symbol in symbol list. MetaId is from var0 to current position of source. The symbol list item stores the MetaId position, length and the current position in output binary grammar. */
-  if(SymCount >= SYM_SIZE)
-    return Error("Too may syntax rules, increase SYM_SIZE");
-  pSym[SymCount].SymSourcePos = Var0;
-  pSym[SymCount].SymLen = (unsigned char)(SourcePos - Var0);
-  pSym[SymCount++].DestPos = DestPos;
+  int i;
+  unsigned char Len = (unsigned char)(SourcePos - Var0);
+  const unsigned char *SourceSym, *ExistingSourceSym;
+  unsigned char NewSymbol[256];
+
+  if(1 == Pass) return PASS;
+  if(SymCount >= EBNF_GRAMMAR_COMPILER_SYM_SIZE) return Error("Too may syntax rules, increase EBNF_GRAMMAR_COMPILER_SYM_SIZE");
+  if(FAIL == pfRead(&SourceSym, Var0, Len)) return Error("Source read error");
+  memcpy(NewSymbol, SourceSym, Len); 
+  for(i = 0; i < SymCount; i++) // check if symbol already defined
+  {
+    if(pSym[i].SymLen != Len) continue;
+    if(FAIL == pfRead(&ExistingSourceSym, pSym[i].SymSourcePos, Len)) return Error("Source read error");
+    if(!memcmp(NewSymbol, ExistingSourceSym, Len)) return Error("Duplicated symbol definition");
+  }
+  pSym[SymCount].SymSourcePos = Var0; pSym[SymCount].SymLen = Len; pSym[SymCount++].DestPos = DestPos;
   return PASS;
 }
 
 static F_ACTION_PROTO(ExprBegin)
 { /* Push dest position, write 0, 0 to dest.  */
-  if(SP >= STACK_SIZE)
-    return Error("Ebnf compiler stack overflow, increase STACK_SIZE");
+  if(SP >= EBNF_GRAMMAR_COMPILER_STACK_SIZE) return Error("Ebnf compiler stack overflow, increase EBNF_GRAMMAR_COMPILER_STACK_SIZE");
   pStack[SP++] = DestPos;
-  if(FAIL == pfWrite((unsigned char *)"\0\0", DestPos, 2))
-    return Error("Compiled grammar write error");
-  DestPos += 2;
-  return PASS;
+  if(FAIL == pfWrite((unsigned char *)"\0\0", DestPos, 2)) return Error("Compiled grammar write error");
+  DestPos += 2; return PASS;
 }
 
 static F_ACTION_PROTO(NextExpr)
@@ -211,97 +220,73 @@ static F_ACTION_PROTO(NextExpr)
   unsigned short BackAnnotateDestPos;
   unsigned char Ch[2];
 
-  if(SP == 0)
-    return Error("Ebnf compiler stack error");
+  if(!SP) return Error("Ebnf compiler stack error");
   BackAnnotateDestPos = (unsigned short)pStack[--SP];
   Ch[0] = (unsigned char)((DestPos - BackAnnotateDestPos) >> 8);
   Ch[1] = ((DestPos - BackAnnotateDestPos) & 0xFF);
-  if(FAIL == pfWrite(Ch, BackAnnotateDestPos, 2))
-    return Error("Compiled grammar write error");
+  if(FAIL == pfWrite(Ch, BackAnnotateDestPos, 2)) return Error("Compiled grammar write error");
   pStack[SP++] = DestPos;
-  if(FAIL == pfWrite((unsigned char *)"\0\0", DestPos, 2))
-    return Error("Compiled grammar write error");
-  DestPos += 2;
-  return PASS;
+  if(FAIL == pfWrite((unsigned char *)"\0\0", DestPos, 2)) return Error("Compiled grammar write error");
+  DestPos += 2; return PASS;
 }
 
 static F_ACTION_PROTO(Pop)
 { /* dummy pop. */
-  if(SP == 0)
-    return Error("Ebnf compiler stack error");
-  SP--;
-  return PASS;
+  if(!SP) return Error("Ebnf compiler stack error");
+  SP--; return PASS;
 }
 
 static F_ACTION_PROTO(CopyVar)
 { /* copy var0 to var1. */
-  Var1 = Var0;
-  return PASS;
+  Var1 = Var0; return PASS;
 }
 
 static F_ACTION_PROTO(SetVar0)
 { /* set var0 to UCHAR_MAX ( =0xFF ) */
-  Var0 = 0xFF;
-  return PASS;
+  Var0 = 0xFF; return PASS;
 }
 
 static F_ACTION_PROTO(RepProc)
 { /* writes to dest the REP_OP code and the MinRep, ExtraOptinalRep from var1 and var0. */
   unsigned char Ch[3];
 
-  if(Var0 < Var1)
-    return Error("Repetitions parameter error");
-  Ch[0] = (unsigned char)-3;
-  Ch[1] = (unsigned char)Var1;
-  Ch[2] = (unsigned char)((Var0 == 0xFF) ? 0xFF : Var0 - Var1);
-  if(FAIL == pfWrite(Ch, DestPos, 3))
-    return Error("Compiled grammar write error");
-  DestPos += 3;
-  return PASS;
+  if(Var0 < Var1) return Error("Repetitions parameter error");
+  Ch[0] = (unsigned char)-3; Ch[1] = (unsigned char)Var1;
+  Ch[2] = (unsigned char)((0xFF == Var0) ? 0xFF : Var0 - Var1);
+  if(FAIL == pfWrite(Ch, DestPos, 3)) return Error("Compiled grammar write error");
+  DestPos += 3; return PASS;
 }
 
 static F_ACTION_PROTO(RewProc)
 { /* if argument is 0 writes to dest the NOT_OP code otherwise the REW_OP code. */
-  unsigned char Ch = (unsigned char)((*Arg == '0') ? -6 : -7);
+  unsigned char Ch = (unsigned char)(('0' == *Arg) ? -6 : -7);
 
-  if(FAIL == pfWrite(&Ch, DestPos, 1))
-    return Error("Compiled grammar write error");
-  DestPos++;
-  return PASS;
+  if(FAIL == pfWrite(&Ch, DestPos, 1)) return Error("Compiled grammar write error");
+  DestPos++; return PASS;
 }
 
 static F_ACTION_PROTO(GroupedSequenceProc)
 { /* writes to dest the OR_EXPR_POS code and 0, 3. */
-  if(FAIL == pfWrite((unsigned char *)"\0\0\03", DestPos, 3))
-    return Error("Compiled grammar write error");
-  DestPos += 3;
-  return PASS;
+  if(FAIL == pfWrite((unsigned char *)"\0\0\03", DestPos, 3)) return Error("Compiled grammar write error");
+  DestPos += 3; return PASS;
 }
 
 static F_ACTION_PROTO(CharRangeProc)
 { /* writes to dest the CHAR_RANGE code and var1, var0. */
   unsigned char Ch[3];
 
-  Ch[0] = (unsigned char)-4;
-  Ch[1] = (unsigned char)Var1;
-  Ch[2] = (unsigned char)Var0;
-  if(FAIL == pfWrite(Ch, DestPos, 3))
-    return Error("Compiled grammar write error");
-  DestPos += 3;
-  return PASS;
+  Ch[0] = (unsigned char)-4; Ch[1] = (unsigned char)Var1; Ch[2] = (unsigned char)Var0;
+  if(FAIL == pfWrite(Ch, DestPos, 3)) return Error("Compiled grammar write error");
+  DestPos += 3; return PASS;
 }
 
 static F_ACTION_PROTO(StringBegin)
 { /* writes to dest the STRING_EQ code, copy dest position to var1, write a 0 to dest. */
   unsigned char Ch[2];
 
-  Ch[0] = (unsigned char)-5;
-  Ch[1] = 0;
-  if(FAIL == pfWrite(Ch, DestPos, 2))
-    return Error("Compiled grammar write error");
-  Var1 = ++DestPos;
-  DestPos++;
-  return PASS;
+  Ch[0] = (unsigned char)-5; Ch[1] = 0;
+  if(FAIL == pfWrite(Ch, DestPos, 2)) return Error("Compiled grammar write error");
+  Var1 = ++DestPos; DestPos++; return PASS;
 }
 
 static F_ACTION_PROTO(WriteVar)
@@ -309,10 +294,8 @@ static F_ACTION_PROTO(WriteVar)
   unsigned char Ch;
 
   Ch = (unsigned char)Var0;
-  if(FAIL == pfWrite(&Ch, DestPos, 1))
-    return Error("Compiled grammar write error");
-  DestPos++;
-  return PASS;
+  if(FAIL == pfWrite(&Ch, DestPos, 1)) return Error("Compiled grammar write error");
+  DestPos++; return PASS;
 }
 
 static F_ACTION_PROTO(StringProc)
@@ -322,15 +305,12 @@ static F_ACTION_PROTO(StringProc)
   if(DestPos - Var1 - 1 != 1) /* null or multi char string */
   {
     Ch[0] = (unsigned char)(DestPos - Var1 - 1);
-    if(FAIL == pfWrite(Ch, Var1, 1))
-      return Error("Compiled grammar write error");
+    if(FAIL == pfWrite(Ch, Var1, 1)) return Error("Compiled grammar write error");
   }
   else
   { /* single char string, replace the opcode to CHAR_EQ = -2, remove len field and overwrite with Var0 */
-    Ch[0] = (unsigned char)-2;
-    Ch[1] = (unsigned char)Var0;
-    if(FAIL == pfWrite(Ch, Var1 - 1, 2))
-      return Error("Compiled grammar write error");
+    Ch[0] = (unsigned char)-2; Ch[1] = (unsigned char)Var0;
+    if(FAIL == pfWrite(Ch, Var1 - 1, 2)) return Error("Compiled grammar write error");
     DestPos--;
   }
   return PASS;
@@ -338,8 +318,7 @@ static F_ACTION_PROTO(StringProc)
 
 static F_ACTION_PROTO(StoreSourcePos)
 { /* set var0 with current source position. */
-  Var0 = SourcePos;
-  return PASS;
+  Var0 = SourcePos; return PASS;
 }
 
 static F_ACTION_PROTO(StoreInt)
@@ -347,12 +326,9 @@ static F_ACTION_PROTO(StoreInt)
   const unsigned char *SourceTerminal;
   unsigned char Len = (unsigned char)(SourcePos - Var0);
 
-  if(FAIL == pfRead(&SourceTerminal, Var0, Len))
-    return Error("Source read error");
-  for(Var0 = 0; Len; Len--, SourceTerminal++)
-    Var0 += 10 * Var0 + *SourceTerminal - '0';
-  if(Var0 > 254)
-    return Error("Invalid integer, maximum 254");
+  if(FAIL == pfRead(&SourceTerminal, Var0, Len)) return Error("Source read error");
+  for(Var0 = 0; Len; Len--, SourceTerminal++) Var0 += 10 * Var0 + *SourceTerminal - '0';
+  if(Var0 > 254) return Error("Invalid integer, maximum 254");
   return PASS;
 }
 
@@ -360,18 +336,15 @@ static F_ACTION_PROTO(StoreChar)
 { /* set var0 with previous source byte value. */
   const unsigned char *SourceTerminal;
 
-  if(FAIL == pfRead(&SourceTerminal, SourcePos - 1, 1))
-    return Error("Source read error");
-  Var0 = *SourceTerminal;
-  return PASS;
+  if(FAIL == pfRead(&SourceTerminal, SourcePos - 1, 1)) return Error("Source read error");
+  Var0 = *SourceTerminal; return PASS;
 }
 
 static F_ACTION_PROTO(StoreHex)
 { /* convert the previous 2 source hex digit to a value into var0. */
   const unsigned char *SourceTerminal;
 
-  if(FAIL == pfRead(&SourceTerminal, SourcePos - 2, 2))
-    return Error("Source read error");
+  if(FAIL == pfRead(&SourceTerminal, SourcePos - 2, 2)) return Error("Source read error");
 
   if((SourceTerminal[0] >= '0') && (SourceTerminal[0] <= '9')) Var0 = (SourceTerminal[0] - '0') * 16;
   else if((SourceTerminal[0] >= 'A') && (SourceTerminal[0] <= 'F')) Var0 = (SourceTerminal[0] - 'A' + 10) * 16;
@@ -393,20 +366,21 @@ static F_ACTION_PROTO(ActionBegin)
   const unsigned char *SourceTerminal;
   unsigned char Ch[3];
 
-  Ch[0] = (unsigned char)-1;
-  Ch[2] = 0;
-  if(FAIL == pfRead(&SourceTerminal, Var0, Len))
-    return Error("Source read error");
+  Ch[0] = (unsigned char)-1; Ch[2] = 0;
+  if(FAIL == pfRead(&SourceTerminal, Var0, Len)) return Error("Source read error");
+  if(!memcmp("Yield", SourceTerminal, strlen("Yield")))
+  {
+    Ch[1] = UCHAR_MAX;
+    if(FAIL == pfWrite(Ch, DestPos, 3)) return Error("Compiled grammar write error");
+    Var1 = DestPos + 2; DestPos += 3; return PASS;
+  }
   for(i = 0; i < UserActNum; i++)
     if(strlen(UserAct[i]) == Len)
       if(!memcmp(UserAct[i], SourceTerminal, Len))
       {
         Ch[1] = (unsigned char)i;
-        if(FAIL == pfWrite(Ch, DestPos, 3))
-          return Error("Compiled grammar write error");
-        Var1 = DestPos + 2; 
-        DestPos += 3;
-        return PASS;
+        if(FAIL == pfWrite(Ch, DestPos, 3)) return Error("Compiled grammar write error");
+        Var1 = DestPos + 2; DestPos += 3; return PASS;
       }
   return Error("Referencing action in grammar not present in ActNames list");
 }
@@ -415,8 +389,7 @@ static F_ACTION_PROTO(ActionProc)
 { /* writes to dest at position var1 the difference between current dest position and var1 - 1. */
   unsigned char Ch = (unsigned char)(DestPos - Var1 - 1);
 
-  if(FAIL == pfWrite(&Ch, Var1, 1))
-    return Error("Compiled grammar write error");
+  if(FAIL == pfWrite(&Ch, Var1, 1)) return Error("Compiled grammar write error");
   return PASS;
 }
 
@@ -427,39 +400,28 @@ static F_ACTION_PROTO(RefProc)
   const unsigned char *SourceTerminal;
   unsigned char RefSym[256], Ch[3];
 
-  if(FAIL == pfRead(&SourceTerminal, Var0, Len))
-    return Error("Source read error");
+  if(FAIL == pfRead(&SourceTerminal, Var0, Len)) return Error("Source read error");
   memcpy(RefSym, SourceTerminal, Len);
-  Ch[0] = 0;
-  for(i = 0; i < SymCount; i++) /* look for symbol in SymbolList */
+  for(Ch[0] = 0, i = 0; i < SymCount; i++) /* look for symbol in SymbolList */
     if(pSym[i].SymLen == Len)
     {
-      if(FAIL == pfRead(&SourceTerminal, pSym[i].SymSourcePos, Len))
-        return FAIL;
+      if(FAIL == pfRead(&SourceTerminal, pSym[i].SymSourcePos, Len)) return FAIL;
       if(!memcmp(SourceTerminal, RefSym, Len))
       {
         Ch[1] = (char)((pSym[i].DestPos - DestPos) >> 8);
         Ch[2] = (char)((pSym[i].DestPos - DestPos) & 0xFF);
-        if(FAIL == pfWrite(Ch, DestPos, 3))
-          return FAIL;
-        DestPos += 3;
-        return PASS;
+        if(FAIL == pfWrite(Ch, DestPos, 3)) return FAIL;
+        DestPos += 3; return PASS;
       }
     }
-  if(Pass == 1)
-    return Error("Referencing a not defined symbol"); /* during second pass means that we are referencing a not defined symbol */ 
-  Ch[1] = 0;
-  Ch[2] = 0;
-  if(FAIL == pfWrite(Ch, DestPos, 3))
-    return Error("Compiled grammar write error");
-  DestPos += 3;
-  return PASS;
+  if(1 == Pass) return Error("Referencing a not defined symbol"); /* during second pass means that we are referencing a not defined symbol */ 
+  Ch[1] = 0; Ch[2] = 0;
+  if(FAIL == pfWrite(Ch, DestPos, 3)) return Error("Compiled grammar write error");
+  DestPos += 3; return PASS;
 }
 
 static F_ACTION_PROTO(Debug)
-{
-  return PASS;
-}
+{ return PASS; }
 
 static F_ACTION *ActFunc[] = /* vector of actions functions pointers used by GrammarBin */
 {
@@ -492,30 +454,26 @@ static FREAD_PROTO(EbnfCompilerSourceRead)
 { /* wrapping the read function to trap the maximum read position */
   int Res = pfRead(Ch, Pos, NumChar);
 
-  if(MaxSourcePos < Pos)
-    MaxSourcePos = Pos;
+  if(MaxSourcePos < Pos) MaxSourcePos = Pos;
   return Res;
 }
 
-SYMBOL Sym[SYM_SIZE]; /* might declare within EbnfGrammarCompiler so memory released at end of compilation */
-long Stack[STACK_SIZE];
+SYMBOL Sym[EBNF_GRAMMAR_COMPILER_SYM_SIZE]; /* might declare within EbnfGrammarCompiler so memory released at end of compilation */
+long Stack[EBNF_GRAMMAR_COMPILER_STACK_SIZE];
 
+#ifndef _MSC_VER
 #pragma stackfunction 40
-unsigned int EbnfGrammarCompiler(FREAD EbnfGrammarRead, char const * const ActNames[], unsigned char ActNum, FWRITE CompiledGrammarWrite)
+#endif
+unsigned int EbnfGrammarCompiler(F_READ EbnfGrammarRead, char const * const ActNames[], unsigned char ActNum, F_WRITE CompiledGrammarWrite)
 {
   unsigned long i;
   unsigned char *Ch;
 
-  pSym = Sym;
-  pStack = Stack;
-  pfRead = EbnfGrammarRead;
-  pfWrite = CompiledGrammarWrite;
-  UserActNum = ActNum;
-  UserAct = ActNames;
+  pSym = Sym; pStack = Stack;
+  pfRead = EbnfGrammarRead; pfWrite = CompiledGrammarWrite;
+  UserActNum = ActNum; UserAct = ActNames;
   MaxSourcePos = 0;
-  if( PASS == Parse(GrammarBin, EbnfCompilerSourceRead, ActFunc) )
-    return (unsigned int)DestPos;
-
+  if(PASS == StartParse(GrammarBin, EbnfCompilerSourceRead, ActFunc)) return (unsigned int)DestPos;
   fprintf(stderr, "\r\n...");
   for(i = (MaxSourcePos < 200) ? 0 : MaxSourcePos - 200; i < MaxSourcePos; i++)
   { /* write the ( up to ) 200 char before the failed parsing position */

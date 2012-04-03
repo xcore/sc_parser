@@ -80,7 +80,7 @@ int main()
   }
   printf("Grammar OK\r\n");
 
-  if(FAIL == Parse(BinGrammar, SourceRead, ActFunc))
+  if(FAIL == StartParse(BinGrammar, SourceRead, ActFunc))
   {
 	printf("Parsing NOK at position %d\r\n", MaxSourcePos);
     return 0;

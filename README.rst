@@ -1,7 +1,7 @@
 PARSER MODULE 
 .............
 
-:Stable release:  1.0.4
+:Stable release:  1.0.5
 
 :Status:  Feature complete
 
@@ -18,7 +18,6 @@ Key Features
 To Do
 =====
 
-* Check for duplicated symbol definition in grammar by the grammar compiler
 * Check for left recursion in grammar by the grammar compiler.
 
 Firmware Overview

@@ -6,10 +6,10 @@ skipping the step of code generation. This makes changes easier and reduces erro
 The parser engine is the module: “CompParser.c” and the related interface: “CompParser.h”;
 it implements an LL(k) recursive descent parser. It need never be edited, only exception could be the directive 
 “#pragma stackfunction 2000”. It might be necessary to increase stack size for the following recursive function 
-if grammar and/or source data are particularly complex although usually this is symptom of a left recursion in the grammar.  
+if grammar and/or source data are particularly complex although usually this is symptom of a left recursion in the grammar.
 
 The parsing function:
-int Parse( const unsigned char Grammar[], FREAD SourceRead, F_ACTION *ActFunc[])
+int StartParse( const unsigned char Grammar[], FREAD SourceRead, F_ACTION *ActFunc[])
 requires as input: a buffer with the compiled binary grammar; a function for reading the source data;
 a vector of function pointers (action functions) that will be called during the parsing process when specified by the grammar.
 Return value is PASS if source matches the grammar syntax rules, FAIL otherwise.
@@ -21,8 +21,10 @@ a vector (and its length) of the names used in the EBNF grammar to identify the 
 a function for writing the compiled grammar.
 Beware that the action names list must be sorted in the same order as ActFunc passed later to the Parse function.
 
-“EbnfGrammarCompiler” module usually need never to be edited unless your grammar defines more than SYM_SIZE syntax rules 
-or you get a “compiler stack overflow” in which case need to increase STACK_SIZE.
+“EbnfGrammarCompiler” module need never to be edited but in the "CompParserConf.h" you need to set the
+EBNF_GRAMMAR_COMPILER_SYM_SIZE more than the number of syntax rules defined in the ebnf grammar and
+EBNF_GRAMMAR_COMPILER_STACK_SIZE more than the maximun number of nested parentheses in the ebnf grammar.
+
 The “EbnfGrammarCompiler” function itself is a sample of usage of the parser function because it calls the parsing engine 
 and a readymade compiled grammar of the EBNF grammar to convert the source EBNF grammar into a compiled binary grammar.
 
@@ -75,6 +77,10 @@ Action names must be listed in a vector to be passed to the grammar compiler.
 The compiled grammar will refer to the action function not by its name but by the index position in the list.
 Later, when the compiled grammar is passed to the parser, a vector of action function pointers need to be passed too.
 The parser will call the functions using the index in the vector.
+
+If USE_INCR_COMPPARSER is defined in "CompParserConf.h" then an incremental version of the parser will be used.
+It has a pre-defined action function (@Yield@) which causes the parser function return to the caller keeping the internal state.
+Then the parsing can be resumed by calling the ContinueParse function. It can be usefull for parsing streams.
 
 Parsing algorithm: the parser starts checking the first syntax rule which in turn may refer to other ones.
 A syntax rule is made of one or more alternatives separated by |. 

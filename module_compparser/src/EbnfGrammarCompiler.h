@@ -6,10 +6,10 @@
 #include "CompParser.h"
 
 #define FWRITE_PROTO(FuncName) int FuncName(const unsigned char *Ch, unsigned int Pos, unsigned int NumChar)
-typedef FWRITE_PROTO(FWRITE);
+typedef FWRITE_PROTO(F_WRITE);
 
 /* Ebnf like grammar compiler. Return value is the size of compiled grammar ( 0 if unsuccessfull ) */
-extern unsigned int EbnfGrammarCompiler(FREAD EbnfGrammarRead, char const * const ActNames[], unsigned char ActNum, FWRITE CompiledGrammarWrite);
+extern unsigned int EbnfGrammarCompiler(F_READ EbnfGrammarRead, char const * const ActNames[], unsigned char ActNum, F_WRITE CompiledGrammarWrite);
 
 #endif
 /* end of EbnfGrammarCompiler.h */
